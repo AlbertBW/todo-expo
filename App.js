@@ -6,24 +6,87 @@ import {
   TouchableOpacity,
   View,
   Keyboard,
+  Button,
 } from "react-native";
-import Task from "./components/Task";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import * as SQLite from "expo-sqlite";
 
 export default function App() {
+  const db = SQLite.openDatabase("todoapp.db");
+  const [isLoading, setIsLoading] = useState(true);
   const [task, setTask] = useState();
   const [taskItems, setTaskItems] = useState([]);
 
-  function handleAddTask() {
-    Keyboard.dismiss();
-    setTaskItems([...taskItems, task]);
-    setTask(null);
+  useEffect(() => {
+    db.transaction((tx) => {
+      tx.executeSql(
+        "CREATE TABLE IF NOT EXISTS taskItems (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT)"
+      );
+    });
+
+    db.transaction((tx) => {
+      tx.executeSql(
+        "SELECT * FROM taskItems",
+        null,
+        (txObj, resultSet) => setTaskItems(resultSet.rows._array),
+        (txObj, error) => console.log(error)
+      );
+    });
+
+    setIsLoading(false);
+  }, [handleAddTask]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.tasksWrapper}>Loading Todos...</Text>
+      </View>
+    );
   }
 
-  function completeTask(index) {
-    let itemsCopy = [...taskItems];
-    itemsCopy.splice(index, 1);
-    setTaskItems(itemsCopy);
+  function handleAddTask() {
+    db.transaction((tx) => {
+      tx.executeSql(
+        "INSERT INTO taskItems (task) values (?)",
+        [task],
+        (resultSet) => {
+          let itemsCopy = [...taskItems];
+          itemsCopy.push({ id: resultSet.insertId, name: task });
+          setTaskItems(itemsCopy);
+          setTask(null);
+        },
+        (error) => console.log(error)
+      );
+    });
+    Keyboard.dismiss();
+  }
+
+  function deleteTask(id) {
+    db.transaction((tx) => {
+      tx.executeSql(
+        "DELETE FROM taskItems WHERE id = ?",
+        [id],
+        (txObj, resultSet) => {
+          if (resultSet.rowsAffected > 0) {
+            let itemsCopy = [...taskItems].filter((task) => task.id !== id);
+            setTaskItems(itemsCopy);
+          }
+        },
+        (error) => console.log(error)
+      );
+    });
+  }
+
+  function Task(task) {
+    return (
+      <View style={styles.item}>
+        <View style={styles.itemLeft}>
+          <View style={styles.square}></View>
+          <Text style={styles.itemText}>{task.task}</Text>
+        </View>
+        <View style={styles.circular}></View>
+      </View>
+    );
   }
 
   return (
@@ -33,14 +96,13 @@ export default function App() {
         <Text style={styles.sectionTitle}>Today's tasks</Text>
         <View style={styles.items}>
           {taskItems.map((task, index) => (
-            <TouchableOpacity key={index} onPress={() => completeTask(index)}>
-              <Task text={task} />
+            <TouchableOpacity key={index} onPress={() => deleteTask(task.id)}>
+              {Task(task)}
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* Write a task */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.writeTaskWrapper}
@@ -49,7 +111,7 @@ export default function App() {
           style={styles.input}
           placeholder={"Write a task"}
           value={task}
-          onChangeText={(text) => setTask(text)}
+          onChangeText={setTask}
         />
         <TouchableOpacity
           onPress={() => handleAddTask()}
@@ -108,4 +170,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   addText: {},
+  item: {
+    backgroundColor: "#FFF",
+    padding: 15,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  itemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  square: {
+    width: 24,
+    height: 24,
+    backgroundColor: "#55BCF6",
+    opacity: 0.4,
+    borderRadius: 5,
+    marginRight: 15,
+  },
+  itemText: {
+    maxWidth: "80%",
+  },
+  circular: {
+    width: 12,
+    height: 12,
+    borderColor: "#55BCF6",
+    borderWidth: 2,
+    borderRadius: 5,
+  },
 });
