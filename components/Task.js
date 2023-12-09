@@ -34,9 +34,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#55BCF6",
     opacity: 0.4,
     borderRadius: 5,
+    marginRight: 15,
   },
   itemText: {
-    maxWidth: 80,
+    maxWidth: "80%",
   },
   circular: {
     width: 12,
